@@ -18,6 +18,7 @@ import org.apache.http.impl.conn.tsccm.ThreadSafeClientConnManager;
 import org.apache.http.params.HttpParams;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.KeyManagementException;
@@ -42,6 +43,7 @@ import javax.net.ssl.X509TrustManager;
 import de.robv.android.xposed.IXposedHookLoadPackage;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XC_MethodReplacement;
+import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
 
 import static de.robv.android.xposed.XposedHelpers.callMethod;
@@ -59,79 +61,33 @@ public class Main implements IXposedHookLoadPackage {
     String currentPackageName = "";
 
     public void handleLoadPackage(final LoadPackageParam lpparam) throws Throwable {
-
         currentPackageName = lpparam.packageName;
-
-
-        //android.security.net.config.RootTrustManager
-
         try{
-            Class RootTrustManager = findClass("android.security.net.config.RootTrustManager", lpparam.classLoader);
-            if (RootTrustManager != null){
-                findAndHookMethod(RootTrustManager, "checkClientTrusted", X509Certificate[].class, String.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-                findAndHookMethod(RootTrustManager, "checkClientTrusted", X509Certificate[].class, String.class, Socket.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-                findAndHookMethod(RootTrustManager, "checkClientTrusted", X509Certificate[].class, String.class, SSLEngine.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-                findAndHookMethod(RootTrustManager, "checkServerTrusted", X509Certificate[].class, String.class, Socket.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-                findAndHookMethod(RootTrustManager, "checkServerTrusted", X509Certificate[].class, String.class, SSLEngine.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-
-                findAndHookMethod(RootTrustManager, "checkServerTrusted", X509Certificate[].class, String.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        param.setResult(null);
-                    }
-                });
-
-                findAndHookMethod(RootTrustManager, "checkServerTrusted", X509Certificate[].class, String.class,String.class, new XC_MethodHook() {
-                    @Override
-                    protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                        super.beforeHookedMethod(param);
-                        X509Certificate[] certs = (X509Certificate[])param.args[0];
-                        List<X509Certificate> list = new ArrayList<X509Certificate>();
-                        if (certs != null){
-                            for (X509Certificate cert:certs){
-                                list.add(cert);
-                            }
+            Class ConfigBuilder = findClass("android.security.net.config.NetworkSecurityConfig.Builder", lpparam.classLoader);
+            findAndHookMethod(ConfigBuilder, "build", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                    super.beforeHookedMethod(param);
+                    try {
+                        Class CertificatesEntryRef = findClass("android.security.net.config.CertificatesEntryRef", lpparam.classLoader);
+                        Class SystemCertificateSource = findClass("android.security.net.config.SystemCertificateSource", lpparam.classLoader);
+                        Object SystemCertificateSourceObj = XposedHelpers.callStaticMethod(SystemCertificateSource, "getInstance");
+                        Class UserCertificateSource = findClass("android.security.net.config.UserCertificateSource", lpparam.classLoader);
+                        Object UserCertificateSourceObj = XposedHelpers.callStaticMethod(UserCertificateSource, "getInstance");
+                        Object SystemCertificateEntryObj = XposedHelpers.newInstance(CertificatesEntryRef, SystemCertificateSourceObj, false);
+                        Object UserCertificateEntryObj = XposedHelpers.newInstance(CertificatesEntryRef, UserCertificateSourceObj, false);
+                        List refs = (List)XposedHelpers.callMethod(param.thisObject, "getCertificatesEntryRefs");
+                        if (refs == null || !refs.contains(SystemCertificateEntryObj)){
+                            XposedHelpers.callMethod(param.thisObject, "addCertificatesEntryRef", SystemCertificateEntryObj);
                         }
-                        param.setResult(list);
+                        if (refs == null || !refs.contains(UserCertificateEntryObj)) {
+                            XposedHelpers.callMethod(param.thisObject, "addCertificatesEntryRef", UserCertificateEntryObj);
+                        }
+                    }catch (Throwable e){
+
                     }
-                });
-            }
+                }
+            });
         }catch (Throwable e){
 
         }
